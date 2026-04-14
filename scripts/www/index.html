@@ -355,7 +355,7 @@
         
         .list-items {
             display: grid;
-            grid-template-columns: repeat(5, 1fr);
+            grid-template-columns: repeat(10, 1fr);
             gap: 10px;
         }
         
@@ -370,6 +370,51 @@
         
         .list-item:hover {
             background-color: #e9ecef;
+        }
+
+        /* 字体大小调节滑动条样式 */
+        .font-size-control {
+            width: 80%;
+            margin: 10px auto 20px;
+            padding: 10px;
+            background-color: white;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .font-size-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 14px;
+            color: #333;
+        }
+
+        .font-size-slider {
+            width: 100%;
+            height: 8px;
+            -webkit-appearance: none;
+            background: #ccc;
+            border-radius: 4px;
+            outline: none;
+        }
+
+        .font-size-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #3498db;
+            cursor: pointer;
+        }
+
+        .font-size-slider::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #3498db;
+            cursor: pointer;
+            border: none;
         }
         
         /* 移动端特定样式 */
@@ -406,7 +451,7 @@
             }
             
             .list-items {
-                grid-template-columns: repeat(3, 1fr); /* 在小屏幕上显示3列 */
+                grid-template-columns: repeat(5, 1fr); /* 在小屏幕上显示3列 */
             }
             
             .question-box {
@@ -440,7 +485,7 @@
         
         @media screen and (max-width: 480px) {
             .list-items {
-                grid-template-columns: repeat(2, 1fr); /* 在更小的屏幕上显示2列 */
+                grid-template-columns: repeat(3, 1fr); /* 在更小的屏幕上显示2列 */
             }
         }
     </style>
@@ -450,6 +495,15 @@
     <div class="container">
         <div class="header">
             <h1>📚 刷题</h1>
+        </div>
+
+        <!-- 字体大小调节控件 -->
+        <div class="font-size-control">
+            <div class="font-size-label">
+                <span>字体大小</span>
+                <span id="fontSizeValue">14px</span>
+            </div>
+            <input type="range" min="10" max="30" value="14" class="font-size-slider" id="fontSizeSlider">
         </div>
 
         <!-- 文件上传区域 -->
@@ -505,6 +559,7 @@
                         <button class="btn btn-purple" id="showListsBtn">📋 查看列表</button>
                         <button class="btn btn-warning" id="randomBtn">🎲 随机练习</button>
                         <button class="btn btn-danger" id="mistakePracticeBtn">❌ 错题练习</button>
+                        <button class="btn btn-secondary" id="memorizeBtn">📖 背题模式</button>
                     </div>
                 </div>
             </div>
@@ -542,11 +597,14 @@
         let mistakeQuestions = []; // 存储错题索引
         let mistakeCounts = []; // 记录每道题的错误次数
         let currentLibraryName = "default"; // 当前题库名称
-        let practiceMode = 'normal'; // normal, random, mistake
+        let practiceMode = 'normal'; // normal, random, mistake, memorize
         let randomOrder = []; // 随机顺序数组
         let currentRandomIdx = 0; // 当前随机题目的索引
         let mistakePracticeOrder = []; // 错题练习顺序
         let currentMistakePracticeIdx = 0; // 当前错题练习的索引
+        let memorizeOrder = []; // 背题顺序数组
+        let currentMemorizeIdx = 0; // 当前背题索引
+        let currentFontSize = 14; // 默认字体大小
 
         const jsonInput = document.getElementById('jsonFile');
         const uploadArea = document.getElementById('uploadArea');
@@ -570,8 +628,11 @@
         const showListsBtn = document.getElementById('showListsBtn');
         const randomBtn = document.getElementById('randomBtn');
         const mistakePracticeBtn = document.getElementById('mistakePracticeBtn');
+        const memorizeBtn = document.getElementById('memorizeBtn');
         const listsModal = document.getElementById('listsModal');
         const closeModal = document.querySelector('.close');
+        const fontSizeSlider = document.getElementById('fontSizeSlider');
+        const fontSizeValue = document.getElementById('fontSizeValue');
 
         // 从localStorage加载题库
         function loadFromStorage() {
@@ -619,7 +680,8 @@
                 answeredStatus,
                 mistakeQuestions,
                 mistakeCounts,
-                libraryName: currentLibraryName
+                libraryName: currentLibraryName,
+                fontSize: currentFontSize // 添加字体大小到存储数据
             };
             localStorage.setItem('quizAppData', JSON.stringify(data));
             console.log("数据已保存到本地存储");
@@ -667,6 +729,8 @@
                     currentRandomIdx = 0; // 重置随机题索引
                     mistakePracticeOrder = []; // 重置错题练习顺序
                     currentMistakePracticeIdx = 0; // 重置错题练习索引
+                    memorizeOrder = []; // 重置背题顺序
+                    currentMemorizeIdx = 0; // 重置背题索引
 
                     // 初始化界面
                     totalNumSpan.textContent = questions.length;
@@ -740,6 +804,17 @@
             return true;
         }
 
+        // 生成背题顺序
+        function generateMemorizeOrder() {
+            memorizeOrder = Array.from({length: questions.length}, (_, i) => i);
+            // Fisher-Yates 洗牌算法
+            for (let i = memorizeOrder.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [memorizeOrder[i], memorizeOrder[j]] = [memorizeOrder[j], memorizeOrder[i]];
+            }
+            currentMemorizeIdx = 0;
+        }
+
         // 加载题目
         function loadQuestion(index) {
             // 确保索引在范围内
@@ -776,21 +851,37 @@
                 </div>
             `;
 
-            // 为每个选项按钮绑定点击事件
-            const optionButtons = questionBox.querySelectorAll('.option-btn');
-            optionButtons.forEach(button => {
-                button.onclick = function() {
-                    if (userAnswer !== null) return; // 防止重复点击
+            // 根据练习模式决定是否启用选项按钮
+            if (practiceMode === 'memorize') {
+                // 背题模式下禁用选项按钮
+                const optionButtons = questionBox.querySelectorAll('.option-btn');
+                optionButtons.forEach(button => {
+                    button.disabled = true;
+                    button.style.opacity = '0.7';
+                    button.onclick = null;
+                });
+                
+                // 直接显示答案和解析
+                showAnswerForMemorize(q);
+            } else {
+                // 练习模式下启用选项按钮
+                const optionButtons = questionBox.querySelectorAll('.option-btn');
+                optionButtons.forEach(button => {
+                    button.disabled = false;
+                    button.style.opacity = '1';
+                    button.onclick = function() {
+                        if (userAnswer !== null) return; // 防止重复点击
 
-                    userAnswer = this.getAttribute('data-value');
-                    // 高亮选中的按钮
-                    optionButtons.forEach(btn => btn.classList.remove('selected'));
-                    this.classList.add('selected');
+                        userAnswer = this.getAttribute('data-value');
+                        // 高亮选中的按钮
+                        optionButtons.forEach(btn => btn.classList.remove('selected'));
+                        this.classList.add('selected');
 
-                    // 自动检查答案
-                    checkAnswer();
-                };
-            });
+                        // 自动检查答案
+                        checkAnswer();
+                    };
+                });
+            }
 
             // 重置按钮状态
             nextBtn.style.display = 'none';
@@ -803,9 +894,41 @@
             } else if (practiceMode === 'mistake') {
                 if (currentMistakePracticeIdx > 0) prevBtn.style.display = 'inline-block';
                 if (currentMistakePracticeIdx < mistakePracticeOrder.length - 1) nextBtn.style.display = 'inline-block';
+            } else if (practiceMode === 'memorize') {
+                if (currentMemorizeIdx > 0) prevBtn.style.display = 'inline-block';
+                if (currentMemorizeIdx < memorizeOrder.length - 1) nextBtn.style.display = 'inline-block';
             } else { // normal mode
                 if (index > 0) prevBtn.style.display = 'inline-block';
                 if (index < questions.length - 1) nextBtn.style.display = 'inline-block';
+            }
+        }
+
+        // 在背题模式下直接显示答案
+        function showAnswerForMemorize(question) {
+            const correctAnswer = question.answer;
+            const correctOption = question.options[correctAnswer];
+            
+            // 高亮正确答案
+            const optionButtons = questionBox.querySelectorAll('.option-btn');
+            optionButtons.forEach(button => {
+                const value = button.getAttribute('data-value');
+                if (value === correctAnswer) {
+                    button.classList.add('correct');
+                }
+            });
+            
+            // 显示答案
+            resultMessage.textContent = `正确答案: ${correctAnswer}`;
+            resultMessage.className = "result correct";
+            resultMessage.classList.remove('hidden');
+            
+            // 显示解析
+            if (question.explanation) {
+                explanationDiv.innerHTML = `<strong>解析：</strong>${question.explanation}`;
+                explanationDiv.classList.remove('hidden');
+            } else {
+                explanationDiv.innerHTML = "<strong>解析：</strong>该题暂无解析";
+                explanationDiv.classList.remove('hidden');
             }
         }
 
@@ -876,6 +999,11 @@
                     currentMistakePracticeIdx++;
                     loadQuestion(mistakePracticeOrder[currentMistakePracticeIdx]);
                 }
+            } else if (practiceMode === 'memorize') {
+                if (currentMemorizeIdx < memorizeOrder.length - 1) {
+                    currentMemorizeIdx++;
+                    loadQuestion(memorizeOrder[currentMemorizeIdx]);
+                }
             } else { // normal mode
                 if (currentIdx < questions.length - 1) {
                     currentIdx++;
@@ -895,6 +1023,11 @@
                 if (currentMistakePracticeIdx > 0) {
                     currentMistakePracticeIdx--;
                     loadQuestion(mistakePracticeOrder[currentMistakePracticeIdx]);
+                }
+            } else if (practiceMode === 'memorize') {
+                if (currentMemorizeIdx > 0) {
+                    currentMemorizeIdx--;
+                    loadQuestion(memorizeOrder[currentMemorizeIdx]);
                 }
             } else { // normal mode
                 if (currentIdx > 0) {
@@ -921,6 +1054,8 @@
                 currentRandomIdx = 0;
                 mistakePracticeOrder = [];
                 currentMistakePracticeIdx = 0;
+                memorizeOrder = [];
+                currentMemorizeIdx = 0;
                 
                 // 保持错题记录
                 // mistakeQuestions 和 mistakeCounts 保持不变
@@ -1038,10 +1173,76 @@
             }
         }
 
+        // 开始背题模式
+        function startMemorizeMode() {
+            if (questions.length === 0) {
+                alert("请先上传题库");
+                return;
+            }
+            
+            practiceMode = 'memorize';
+            generateMemorizeOrder();
+            currentMemorizeIdx = 0;
+            loadQuestion(memorizeOrder[currentMemorizeIdx]);
+        }
+
+        // 更新字体大小
+        function updateFontSize(size) {
+            // 更新全局字体大小变量
+            currentFontSize = size;
+            
+            // 更新滑动条值和显示
+            fontSizeSlider.value = size;
+            fontSizeValue.textContent = size + 'px';
+            
+            // 更新页面上的所有文本元素字体大小
+            document.body.style.fontSize = size + 'px';
+            
+            // 更新其他特定元素的字体大小
+            const elements = [
+                '.header h1',
+                '.section-title',
+                '.question-box h4',
+                '.option-btn',
+                '.result',
+                '.status-bar',
+                '.progress-text',
+                '.modal-content h2',
+                '.list-section h3'
+            ];
+            
+            elements.forEach(selector => {
+                const elements = document.querySelectorAll(selector);
+                elements.forEach(element => {
+                    element.style.fontSize = size + 'px';
+                });
+            });
+            
+            // 保存到本地存储
+            saveToStorage();
+        }
+
         // 页面加载时自动加载本地存储的题库
         window.addEventListener('load', function() {
             if (!loadFromStorage()) {
                 console.log("本地存储中没有题库，等待用户上传");
+            }
+            
+            // 尝试从本地存储加载字体大小设置
+            const savedData = localStorage.getItem('quizAppData');
+            if (savedData) {
+                try {
+                    const parsedData = JSON.parse(savedData);
+                    if (parsedData.fontSize !== undefined) {
+                        updateFontSize(parsedData.fontSize);
+                    } else {
+                        updateFontSize(14); // 默认字体大小
+                    }
+                } catch (e) {
+                    updateFontSize(14); // 默认字体大小
+                }
+            } else {
+                updateFontSize(14); // 默认字体大小
             }
         });
 
@@ -1054,6 +1255,7 @@
         showListsBtn.addEventListener('click', showListsModal);
         randomBtn.addEventListener('click', startRandomPractice);
         mistakePracticeBtn.addEventListener('click', startMistakePractice);
+        memorizeBtn.addEventListener('click', startMemorizeMode);
         
         // 关闭模态框
         closeModal.addEventListener('click', function() {
@@ -1064,6 +1266,12 @@
             if (event.target === listsModal) {
                 listsModal.style.display = 'none';
             }
+        });
+        
+        // 监听字体大小滑动条变化
+        fontSizeSlider.addEventListener('input', function() {
+            const size = parseInt(this.value);
+            updateFontSize(size);
         });
     </script>
 </body>
