@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>刷题软件 - 增强版</title>
+    <title>刷题软件 - 错题顺序练习版</title>
     <style>
         * {
             box-sizing: border-box;
@@ -634,6 +634,7 @@
                         <button class="btn btn-warning" id="randomBtn">🎲 随机练习</button>
                         <button class="btn btn-danger" id="mistakePracticeBtn">❌ 错题练习</button>
                         <button class="btn btn-secondary" id="memorizeBtn">📖 背题模式</button>
+                        <button class="btn btn-danger" id="mistakeMemorizeBtn">📝 错题背题</button>
                     </div>
                 </div>
             </div>
@@ -694,13 +695,15 @@
         let mistakeQuestions = []; // 存储错题索引
         let mistakeCounts = []; // 记录每道题的错误次数
         let currentLibraryName = "default"; // 当前题库名称
-        let practiceMode = 'normal'; // normal, random, mistake, memorize
+        let practiceMode = 'normal'; // normal, random, mistake, memorize, mistakeMemorize
         let randomOrder = []; // 随机顺序数组
         let currentRandomIdx = 0; // 当前随机题目的索引
-        let mistakePracticeOrder = []; // 错题练习顺序
+        let mistakePracticeOrder = []; // 错题练习顺序 - 按顺序排列
         let currentMistakePracticeIdx = 0; // 当前错题练习的索引
         let memorizeOrder = []; // 背题顺序数组
         let currentMemorizeIdx = 0; // 当前背题索引
+        let mistakeMemorizeOrder = []; // 错题背题顺序数组
+        let currentMistakeMemorizeIdx = 0; // 当前错题背题索引
         let currentFontSize = 14; // 默认字体大小
 
         // 触摸滑动相关变量
@@ -730,6 +733,7 @@
         const randomBtn = document.getElementById('randomBtn');
         const mistakePracticeBtn = document.getElementById('mistakePracticeBtn');
         const memorizeBtn = document.getElementById('memorizeBtn');
+        const mistakeMemorizeBtn = document.getElementById('mistakeMemorizeBtn');
         const listsModal = document.getElementById('listsModal');
         const closeModal = document.querySelector('.close');
         const fontSizeSlider = document.getElementById('fontSizeSlider');
@@ -847,6 +851,8 @@
                     currentMistakePracticeIdx = 0; // 重置错题练习索引
                     memorizeOrder = []; // 重置背题顺序
                     currentMemorizeIdx = 0; // 重置背题索引
+                    mistakeMemorizeOrder = []; // 重置错题背题顺序
+                    currentMistakeMemorizeIdx = 0; // 重置错题背题索引
 
                     // 初始化界面
                     totalNumSpan.textContent = questions.length;
@@ -903,19 +909,15 @@
             currentRandomIdx = 0;
         }
 
-        // 生成错题练习顺序
+        // 生成错题练习顺序 - 按顺序排列，不随机
         function generateMistakePracticeOrder() {
             if (mistakeQuestions.length === 0) {
                 alert("暂无错题，无法开始错题练习");
                 return false;
             }
             
-            mistakePracticeOrder = [...mistakeQuestions];
-            // Fisher-Yates 洗牌算法
-            for (let i = mistakePracticeOrder.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [mistakePracticeOrder[i], mistakePracticeOrder[j]] = [mistakePracticeOrder[j], mistakePracticeOrder[i]];
-            }
+            // 按顺序排列错题，不随机打乱
+            mistakePracticeOrder = [...mistakeQuestions].sort((a, b) => a - b);
             currentMistakePracticeIdx = 0;
             return true;
         }
@@ -924,6 +926,19 @@
         function generateMemorizeOrder() {
             memorizeOrder = Array.from({length: questions.length}, (_, i) => i);
             currentMemorizeIdx = 0;
+        }
+
+        // 生成错题背题顺序 - 按顺序
+        function generateMistakeMemorizeOrder() {
+            if (mistakeQuestions.length === 0) {
+                alert("暂无错题，无法开始错题背题模式");
+                return false;
+            }
+            
+            // 按顺序排列错题，用于背题模式
+            mistakeMemorizeOrder = [...mistakeQuestions].sort((a, b) => a - b);
+            currentMistakeMemorizeIdx = 0;
+            return true;
         }
 
         // 加载题目
@@ -964,7 +979,7 @@
             `;
 
             // 根据练习模式决定是否启用选项按钮
-            if (practiceMode === 'memorize') {
+            if (practiceMode === 'memorize' || practiceMode === 'mistakeMemorize') {
                 // 背题模式下禁用选项按钮
                 const optionButtons = questionBox.querySelectorAll('.option-btn');
                 optionButtons.forEach(button => {
@@ -1009,6 +1024,9 @@
             } else if (practiceMode === 'memorize') {
                 if (currentMemorizeIdx > 0) prevBtn.style.display = 'inline-block';
                 if (currentMemorizeIdx < memorizeOrder.length - 1) nextBtn.style.display = 'inline-block';
+            } else if (practiceMode === 'mistakeMemorize') {
+                if (currentMistakeMemorizeIdx > 0) prevBtn.style.display = 'inline-block';
+                if (currentMistakeMemorizeIdx < mistakeMemorizeOrder.length - 1) nextBtn.style.display = 'inline-block';
             } else { // normal mode
                 if (index > 0) prevBtn.style.display = 'inline-block';
                 if (index < questions.length - 1) nextBtn.style.display = 'inline-block';
@@ -1073,6 +1091,8 @@
                 // 添加到错题集（如果尚未加入）
                 if (!mistakeQuestions.includes(currentIdx)) {
                     mistakeQuestions.push(currentIdx);
+                    // 按顺序重新排序错题列表
+                    mistakeQuestions.sort((a, b) => a - b);
                 }
                 // 增加错误次数
                 mistakeCounts[currentIdx]++;
@@ -1116,6 +1136,11 @@
                     currentMemorizeIdx++;
                     loadQuestion(memorizeOrder[currentMemorizeIdx]);
                 }
+            } else if (practiceMode === 'mistakeMemorize') {
+                if (currentMistakeMemorizeIdx < mistakeMemorizeOrder.length - 1) {
+                    currentMistakeMemorizeIdx++;
+                    loadQuestion(mistakeMemorizeOrder[currentMistakeMemorizeIdx]);
+                }
             } else { // normal mode
                 if (currentIdx < questions.length - 1) {
                     currentIdx++;
@@ -1140,6 +1165,11 @@
                 if (currentMemorizeIdx > 0) {
                     currentMemorizeIdx--;
                     loadQuestion(memorizeOrder[currentMemorizeIdx]);
+                }
+            } else if (practiceMode === 'mistakeMemorize') {
+                if (currentMistakeMemorizeIdx > 0) {
+                    currentMistakeMemorizeIdx--;
+                    loadQuestion(mistakeMemorizeOrder[currentMistakeMemorizeIdx]);
                 }
             } else { // normal mode
                 if (currentIdx > 0) {
@@ -1168,6 +1198,8 @@
                 currentMistakePracticeIdx = 0;
                 memorizeOrder = [];
                 currentMemorizeIdx = 0;
+                mistakeMemorizeOrder = [];
+                currentMistakeMemorizeIdx = 0;
                 
                 // 保持错题记录
                 // mistakeQuestions 和 mistakeCounts 保持不变
@@ -1296,6 +1328,19 @@
             generateMemorizeOrder(); // 按顺序排列
             currentMemorizeIdx = 0;
             loadQuestion(memorizeOrder[currentMemorizeIdx]);
+        }
+
+        // 开始错题背题模式 - 按顺序
+        function startMistakeMemorizeMode() {
+            if (mistakeQuestions.length === 0) {
+                alert("暂无错题，无法开始错题背题模式");
+                return;
+            }
+            
+            if (generateMistakeMemorizeOrder()) {
+                practiceMode = 'mistakeMemorize';
+                loadQuestion(mistakeMemorizeOrder[currentMistakeMemorizeIdx]);
+            }
         }
 
         // 更新字体大小
@@ -1430,6 +1475,9 @@
             mistakeCounts = recordData.mistakeCounts || new Array(questions.length).fill(0);
             currentLibraryName = recordData.libraryName || currentLibraryName;
             
+            // 按顺序重新排序错题列表
+            mistakeQuestions.sort((a, b) => a - b);
+            
             // 更新界面
             updateStatusBar();
             updateProgress();
@@ -1509,6 +1557,7 @@
         randomBtn.addEventListener('click', startRandomPractice);
         mistakePracticeBtn.addEventListener('click', startMistakePractice);
         memorizeBtn.addEventListener('click', startMemorizeMode);
+        mistakeMemorizeBtn.addEventListener('click', startMistakeMemorizeMode);
         
         // 导入导出按钮事件
         exportBtn.addEventListener('click', exportLearningRecord);
