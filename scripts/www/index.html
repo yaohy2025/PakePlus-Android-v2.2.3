@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>刷题软件 - 错题顺序练习版</title>
+    <title>刷题软件 - 错题练习后只背错题</title>
     <style>
         * {
             box-sizing: border-box;
@@ -137,6 +137,10 @@
         .btn-import {
             background-color: #f1c40f;
             color: #2c3c50;
+        }
+        
+        .btn-memorize-active {
+            background-color: #e67e22;
         }
         
         .quiz-container {
@@ -633,8 +637,8 @@
                         <button class="btn btn-purple" id="showListsBtn">📋 查看列表</button>
                         <button class="btn btn-warning" id="randomBtn">🎲 随机练习</button>
                         <button class="btn btn-danger" id="mistakePracticeBtn">❌ 错题练习</button>
-                        <button class="btn btn-secondary" id="memorizeBtn">📖 背题模式</button>
-                        <button class="btn btn-danger" id="mistakeMemorizeBtn">📝 错题背题</button>
+                        <button class="btn btn-secondary" id="memorizeAllBtn">📖 背全部题</button>
+                        <button class="btn btn-danger" id="memorizeMistakesBtn">📖 背错题</button>
                     </div>
                 </div>
             </div>
@@ -695,16 +699,18 @@
         let mistakeQuestions = []; // 存储错题索引
         let mistakeCounts = []; // 记录每道题的错误次数
         let currentLibraryName = "default"; // 当前题库名称
-        let practiceMode = 'normal'; // normal, random, mistake, memorize, mistakeMemorize
+        let practiceMode = 'normal'; // normal, random, mistake, memorizeAll, memorizeMistakes
         let randomOrder = []; // 随机顺序数组
         let currentRandomIdx = 0; // 当前随机题目的索引
         let mistakePracticeOrder = []; // 错题练习顺序 - 按顺序排列
         let currentMistakePracticeIdx = 0; // 当前错题练习的索引
         let memorizeOrder = []; // 背题顺序数组
         let currentMemorizeIdx = 0; // 当前背题索引
-        let mistakeMemorizeOrder = []; // 错题背题顺序数组
-        let currentMistakeMemorizeIdx = 0; // 当前错题背题索引
+        let memorizeStartIdx = 0; // 记录背题开始的题目索引
+        let originalOrder = []; // 记录原始顺序
         let currentFontSize = 14; // 默认字体大小
+        let memorizeActive = false; // 背题模式激活状态
+        let memorizeSource = 'all'; // 背题来源：'all'表示全部题目，'mistake'表示错题集
 
         // 触摸滑动相关变量
         let touchStartX = 0;
@@ -732,8 +738,8 @@
         const showListsBtn = document.getElementById('showListsBtn');
         const randomBtn = document.getElementById('randomBtn');
         const mistakePracticeBtn = document.getElementById('mistakePracticeBtn');
-        const memorizeBtn = document.getElementById('memorizeBtn');
-        const mistakeMemorizeBtn = document.getElementById('mistakeMemorizeBtn');
+        const memorizeAllBtn = document.getElementById('memorizeAllBtn');
+        const memorizeMistakesBtn = document.getElementById('memorizeMistakesBtn');
         const listsModal = document.getElementById('listsModal');
         const closeModal = document.querySelector('.close');
         const fontSizeSlider = document.getElementById('fontSizeSlider');
@@ -765,6 +771,11 @@
                     mistakeCounts = parsedData.mistakeCounts || [];
                     currentLibraryName = parsedData.libraryName || "default";
                     currentFontSize = parsedData.fontSize || 14; // 加载字体大小
+                    memorizeActive = parsedData.memorizeActive || false; // 加载背题模式状态
+                    memorizeOrder = parsedData.memorizeOrder || [];
+                    currentMemorizeIdx = parsedData.currentMemorizeIdx || 0;
+                    memorizeStartIdx = parsedData.memorizeStartIdx || 0;
+                    memorizeSource = parsedData.memorizeSource || 'all'; // 加载背题来源
                     
                     if (questions.length > 0) {
                         // 初始化界面
@@ -782,6 +793,17 @@
                         uploadArea.style.display = 'none';
                         sidebar.style.display = 'flex';
                         quizContainer.style.display = 'block';
+                        
+                        // 更新背题模式按钮状态
+                        if (memorizeActive) {
+                            if (memorizeSource === 'mistake') {
+                                memorizeMistakesBtn.textContent = "↩️ 退出错题背题";
+                                memorizeMistakesBtn.classList.add('btn-memorize-active');
+                            } else {
+                                memorizeAllBtn.textContent = "↩️ 退出全部背题";
+                                memorizeAllBtn.classList.add('btn-memorize-active');
+                            }
+                        }
                         
                         console.log("从本地存储加载题库成功");
                         return true;
@@ -801,7 +823,12 @@
                 mistakeQuestions,
                 mistakeCounts,
                 libraryName: currentLibraryName,
-                fontSize: currentFontSize // 添加字体大小到存储数据
+                fontSize: currentFontSize, // 添加字体大小到存储数据
+                memorizeActive: memorizeActive, // 保存背题模式状态
+                memorizeOrder: memorizeOrder,
+                currentMemorizeIdx: currentMemorizeIdx,
+                memorizeStartIdx: memorizeStartIdx,
+                memorizeSource: memorizeSource // 保存背题来源
             };
             localStorage.setItem('quizAppData', JSON.stringify(data));
             console.log("数据已保存到本地存储");
@@ -851,8 +878,10 @@
                     currentMistakePracticeIdx = 0; // 重置错题练习索引
                     memorizeOrder = []; // 重置背题顺序
                     currentMemorizeIdx = 0; // 重置背题索引
-                    mistakeMemorizeOrder = []; // 重置错题背题顺序
-                    currentMistakeMemorizeIdx = 0; // 重置错题背题索引
+                    memorizeStartIdx = 0; // 重置背题开始索引
+                    memorizeActive = false; // 重置背题模式状态
+                    memorizeSource = 'all'; // 重置背题来源为全部题目
+                    originalOrder = Array.from({length: questions.length}, (_, i) => i); // 记录原始顺序
 
                     // 初始化界面
                     totalNumSpan.textContent = questions.length;
@@ -922,22 +951,34 @@
             return true;
         }
 
-        // 生成背题顺序 - 按顺序
-        function generateMemorizeOrder() {
-            memorizeOrder = Array.from({length: questions.length}, (_, i) => i);
-            currentMemorizeIdx = 0;
-        }
-
-        // 生成错题背题顺序 - 按顺序
-        function generateMistakeMemorizeOrder() {
-            if (mistakeQuestions.length === 0) {
-                alert("暂无错题，无法开始错题背题模式");
-                return false;
+        // 生成背题顺序 - 根据来源决定题目范围
+        function generateMemorizeOrder(startIndex) {
+            if (memorizeSource === 'mistake') {
+                // 从错题集中生成背题顺序
+                if (mistakeQuestions.length === 0) {
+                    alert("暂无错题，无法进入错题背题模式");
+                    memorizeActive = false;
+                    memorizeMistakesBtn.textContent = "📖 背错题";
+                    memorizeMistakesBtn.classList.remove('btn-memorize-active');
+                    return false;
+                }
+                memorizeOrder = [...mistakeQuestions].sort((a, b) => a - b);
+                // 确保startIndex在错题集合范围内
+                currentMemorizeIdx = 0;
+                if (startIndex !== undefined) {
+                    // 找到最接近的错题索引
+                    const closestMistake = memorizeOrder.reduce((closest, current) => {
+                        return Math.abs(current - startIndex) < Math.abs(closest - startIndex) ? current : closest;
+                    });
+                    currentMemorizeIdx = memorizeOrder.indexOf(closestMistake);
+                }
+                memorizeStartIdx = currentMemorizeIdx;
+            } else {
+                // 从全部题目中生成背题顺序
+                memorizeOrder = Array.from({length: questions.length}, (_, i) => i);
+                currentMemorizeIdx = startIndex; // 从指定的开始索引开始
+                memorizeStartIdx = startIndex; // 记录开始索引
             }
-            
-            // 按顺序排列错题，用于背题模式
-            mistakeMemorizeOrder = [...mistakeQuestions].sort((a, b) => a - b);
-            currentMistakeMemorizeIdx = 0;
             return true;
         }
 
@@ -979,7 +1020,7 @@
             `;
 
             // 根据练习模式决定是否启用选项按钮
-            if (practiceMode === 'memorize' || practiceMode === 'mistakeMemorize') {
+            if (practiceMode === 'memorizeAll' || practiceMode === 'memorizeMistakes') {
                 // 背题模式下禁用选项按钮
                 const optionButtons = questionBox.querySelectorAll('.option-btn');
                 optionButtons.forEach(button => {
@@ -1021,12 +1062,9 @@
             } else if (practiceMode === 'mistake') {
                 if (currentMistakePracticeIdx > 0) prevBtn.style.display = 'inline-block';
                 if (currentMistakePracticeIdx < mistakePracticeOrder.length - 1) nextBtn.style.display = 'inline-block';
-            } else if (practiceMode === 'memorize') {
+            } else if (practiceMode === 'memorizeAll' || practiceMode === 'memorizeMistakes') {
                 if (currentMemorizeIdx > 0) prevBtn.style.display = 'inline-block';
                 if (currentMemorizeIdx < memorizeOrder.length - 1) nextBtn.style.display = 'inline-block';
-            } else if (practiceMode === 'mistakeMemorize') {
-                if (currentMistakeMemorizeIdx > 0) prevBtn.style.display = 'inline-block';
-                if (currentMistakeMemorizeIdx < mistakeMemorizeOrder.length - 1) nextBtn.style.display = 'inline-block';
             } else { // normal mode
                 if (index > 0) prevBtn.style.display = 'inline-block';
                 if (index < questions.length - 1) nextBtn.style.display = 'inline-block';
@@ -1131,15 +1169,10 @@
                     currentMistakePracticeIdx++;
                     loadQuestion(mistakePracticeOrder[currentMistakePracticeIdx]);
                 }
-            } else if (practiceMode === 'memorize') {
+            } else if (practiceMode === 'memorizeAll' || practiceMode === 'memorizeMistakes') {
                 if (currentMemorizeIdx < memorizeOrder.length - 1) {
                     currentMemorizeIdx++;
                     loadQuestion(memorizeOrder[currentMemorizeIdx]);
-                }
-            } else if (practiceMode === 'mistakeMemorize') {
-                if (currentMistakeMemorizeIdx < mistakeMemorizeOrder.length - 1) {
-                    currentMistakeMemorizeIdx++;
-                    loadQuestion(mistakeMemorizeOrder[currentMistakeMemorizeIdx]);
                 }
             } else { // normal mode
                 if (currentIdx < questions.length - 1) {
@@ -1161,15 +1194,10 @@
                     currentMistakePracticeIdx--;
                     loadQuestion(mistakePracticeOrder[currentMistakePracticeIdx]);
                 }
-            } else if (practiceMode === 'memorize') {
+            } else if (practiceMode === 'memorizeAll' || practiceMode === 'memorizeMistakes') {
                 if (currentMemorizeIdx > 0) {
                     currentMemorizeIdx--;
                     loadQuestion(memorizeOrder[currentMemorizeIdx]);
-                }
-            } else if (practiceMode === 'mistakeMemorize') {
-                if (currentMistakeMemorizeIdx > 0) {
-                    currentMistakeMemorizeIdx--;
-                    loadQuestion(mistakeMemorizeOrder[currentMistakeMemorizeIdx]);
                 }
             } else { // normal mode
                 if (currentIdx > 0) {
@@ -1198,14 +1226,21 @@
                 currentMistakePracticeIdx = 0;
                 memorizeOrder = [];
                 currentMemorizeIdx = 0;
-                mistakeMemorizeOrder = [];
-                currentMistakeMemorizeIdx = 0;
+                memorizeStartIdx = 0;
+                memorizeActive = false; // 重置背题模式状态
+                memorizeSource = 'all'; // 重置背题来源
                 
                 // 保持错题记录
                 // mistakeQuestions 和 mistakeCounts 保持不变
                 
                 // 重置文件输入
                 jsonInput.value = '';
+                
+                // 更新背题模式按钮
+                memorizeAllBtn.textContent = "📖 背全部题";
+                memorizeAllBtn.classList.remove('btn-memorize-active');
+                memorizeMistakesBtn.textContent = "📖 背错题";
+                memorizeMistakesBtn.classList.remove('btn-memorize-active');
             }
         }
 
@@ -1237,7 +1272,7 @@
                 answeredItems.forEach(index => {
                     const div = document.createElement('div');
                     div.className = 'list-item';
-                    div.textContent = `第 ${index + 1} 题`;
+                    div.textContent = ` ${index + 1} `;
                     div.onclick = () => {
                         currentIdx = index;
                         practiceMode = 'normal';
@@ -1257,7 +1292,7 @@
                 mistakeItems.forEach(index => {
                     const div = document.createElement('div');
                     div.className = 'list-item';
-                    div.textContent = `第 ${index + 1} 题 (${mistakeCounts[index]}次)`;
+                    div.textContent = ` ${index + 1} , (${mistakeCounts[index]}次)`;
                     div.onclick = () => {
                         currentIdx = index;
                         practiceMode = 'mistake';
@@ -1277,7 +1312,7 @@
                 unansweredItems.forEach(index => {
                     const div = document.createElement('div');
                     div.className = 'list-item';
-                    div.textContent = `第 ${index + 1} 题`;
+                    div.textContent = ` ${index + 1} `;
                     div.onclick = () => {
                         currentIdx = index;
                         practiceMode = 'normal';
@@ -1313,33 +1348,101 @@
             
             if (generateMistakePracticeOrder()) {
                 practiceMode = 'mistake';
+                memorizeSource = 'mistake'; // 设置背题来源为错题集
                 loadQuestion(mistakePracticeOrder[currentMistakePracticeIdx]);
             }
         }
 
-        // 开始背题模式 - 按顺序
-        function startMemorizeMode() {
+        // 开始背全部题模式 - 从当前题目开始
+        function startMemorizeAllMode() {
             if (questions.length === 0) {
                 alert("请先上传题库");
                 return;
             }
             
-            practiceMode = 'memorize';
-            generateMemorizeOrder(); // 按顺序排列
-            currentMemorizeIdx = 0;
-            loadQuestion(memorizeOrder[currentMemorizeIdx]);
+            if (memorizeActive && memorizeSource === 'all') {
+                // 退出背全部题模式，恢复到之前的模式
+                memorizeActive = false;
+                memorizeSource = 'all';
+                memorizeAllBtn.textContent = "📖 背全部题";
+                memorizeAllBtn.classList.remove('btn-memorize-active');
+                
+                // 如果之前不是正常模式，恢复到正常模式
+                if (practiceMode === 'memorizeAll') {
+                    practiceMode = 'normal';
+                    loadQuestion(currentIdx); // 重新加载当前题，使用正常模式
+                }
+            } else {
+                // 进入背全部题模式
+                memorizeActive = true;
+                practiceMode = 'memorizeAll';
+                memorizeSource = 'all'; // 设置为全部题目
+                
+                // 生成背题顺序
+                if (!generateMemorizeOrder(currentIdx)) {
+                    return; // 如果生成失败则不进入背题模式
+                }
+                
+                loadQuestion(memorizeOrder[currentMemorizeIdx]);
+                
+                // 更新按钮文字和样式
+                memorizeAllBtn.textContent = "↩️ 退出全部背题";
+                memorizeAllBtn.classList.add('btn-memorize-active');
+                
+                // 重置错题背题按钮状态
+                memorizeMistakesBtn.textContent = "📖 背错题";
+                memorizeMistakesBtn.classList.remove('btn-memorize-active');
+            }
         }
 
-        // 开始错题背题模式 - 按顺序
-        function startMistakeMemorizeMode() {
-            if (mistakeQuestions.length === 0) {
-                alert("暂无错题，无法开始错题背题模式");
+        // 开始背错题模式 - 从当前题目开始
+        function startMemorizeMistakesMode() {
+            if (questions.length === 0) {
+                alert("请先上传题库");
                 return;
             }
             
-            if (generateMistakeMemorizeOrder()) {
-                practiceMode = 'mistakeMemorize';
-                loadQuestion(mistakeMemorizeOrder[currentMistakeMemorizeIdx]);
+            if (memorizeActive && memorizeSource === 'mistake') {
+                // 退出背错题模式，恢复到之前的模式
+                memorizeActive = false;
+                memorizeSource = 'all';
+                memorizeMistakesBtn.textContent = "📖 背错题";
+                memorizeMistakesBtn.classList.remove('btn-memorize-active');
+                
+                // 如果之前不是正常模式，恢复到正常模式
+                if (practiceMode === 'memorizeMistakes') {
+                    practiceMode = 'normal';
+                    loadQuestion(currentIdx); // 重新加载当前题，使用正常模式
+                }
+            } else {
+                // 进入背错题模式
+                memorizeActive = true;
+                practiceMode = 'memorizeMistakes';
+                memorizeSource = 'mistake'; // 设置为错题集
+                
+                // 如果当前没有错题，则提示并返回
+                if (mistakeQuestions.length === 0) {
+                    alert("暂无错题，无法进入错题背题模式");
+                    memorizeActive = false;
+                    memorizeMistakesBtn.textContent = "📖 背错题";
+                    memorizeMistakesBtn.classList.remove('btn-memorize-active');
+                    return;
+                }
+                
+                // 生成背题顺序
+                if (!generateMemorizeOrder(currentIdx)) {
+                    return; // 如果生成失败则不进入背题模式
+                }
+                
+                loadQuestion(memorizeOrder[currentMemorizeIdx]);
+                
+                // 更新按钮文字和样式
+                memorizeMistakesBtn.textContent = "↩️ 退出错题背题";
+                memorizeMistakesBtn.classList.add('btn-memorize-active');
+                
+                // 重置全部背题按钮状态
+                memorizeAllBtn.textContent = "📖 背全部题";
+                memorizeAllBtn.classList.remove('btn-memorize-active');
             }
         }
 
@@ -1556,8 +1659,8 @@
         showListsBtn.addEventListener('click', showListsModal);
         randomBtn.addEventListener('click', startRandomPractice);
         mistakePracticeBtn.addEventListener('click', startMistakePractice);
-        memorizeBtn.addEventListener('click', startMemorizeMode);
-        mistakeMemorizeBtn.addEventListener('click', startMistakeMemorizeMode);
+        memorizeAllBtn.addEventListener('click', startMemorizeAllMode);
+        memorizeMistakesBtn.addEventListener('click', startMemorizeMistakesMode);
         
         // 导入导出按钮事件
         exportBtn.addEventListener('click', exportLearningRecord);
